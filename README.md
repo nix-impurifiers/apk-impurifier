@@ -32,3 +32,5 @@ nix flake check -L
 Checks include native APK verification, reference-free artifact closures, shared engine contracts, and a QEMU VM with actual Alpine userspace, APK and OpenRC. The fixture supplies a preinstalled Nix/Python runtime and pinned native OpenRC packages; it does not test a Nix installer or an Alpine kernel/PID 1 boot.
 
 GPL-3.0-or-later.
+
+Lifecycle hooks `lifecycle.onInstall` and `lifecycle.onUpgrade` accept shell bodies. They run as root after accounts/directories exist and the new profile is published, before service activation. Use `/opt/nix/profile/bin/<tool>` for projected commands and declare native dependencies for other commands. Install hooks run until the application's first successful activation; upgrade hooks run when its output, version or hook revision changes, including native downgrades. A failed hook leaves activation pending and may be retried, so hooks must be idempotent. They do not provide database rollback or exactly-once execution. Flavor-only changes to the same application do not rerun completed hooks.

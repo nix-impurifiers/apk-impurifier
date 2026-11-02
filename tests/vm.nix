@@ -46,6 +46,16 @@ let
         owner = "apk-service:apk-service";
         mode = "0750";
       };
+      lifecycle = {
+        onInstall = ''
+          id apk-service
+          test -x /opt/nix/profile/bin/apk-service
+          echo initialized > /var/lib/apk-service/initialized
+        '';
+        onUpgrade = ''
+          echo ${version} > /var/lib/apk-service/migrated
+        '';
+      };
       openrc.script = pkgs.writeText "apk-service.init" ''
         #!/sbin/openrc-run
         command=/opt/nix/profile/bin/apk-service
@@ -124,10 +134,12 @@ pkgs.testers.runNixOSTest {
     with subtest("OpenRC lifecycle uses actual native account and service tools"):
         machine.succeed(apk + "add /packages/service1.apk")
         machine.wait_until_succeeds("grep '^1$' /srv/alpine/var/lib/apk-service/version")
+        machine.succeed("grep initialized /srv/alpine/var/lib/apk-service/initialized")
         machine.succeed(root + "/sbin/rc-service apk-service status")
         machine.succeed("test $(stat -c %U /srv/alpine/var/lib/apk-service) != root")
         machine.succeed(apk + "add /packages/service2.apk")
         machine.wait_until_succeeds("grep '^2$' /srv/alpine/var/lib/apk-service/version")
+        machine.succeed("grep '^2$' /srv/alpine/var/lib/apk-service/migrated")
         machine.succeed(root + "/sbin/rc-service apk-service stop")
         machine.succeed(root + "/sbin/rc-update del apk-service default")
         machine.succeed(apk + "add /packages/service1.apk")
