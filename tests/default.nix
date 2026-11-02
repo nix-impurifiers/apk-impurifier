@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-License-Identifier: MIT
 { pkgs, impurifier }:
 let
   net = impurifier.makeNetApk { pkg = pkgs.hello; };
