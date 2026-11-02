@@ -1,0 +1,12 @@
+--- a/abuild-tar.c
++++ b/abuild-tar.c
+@@ -287,5 +287,8 @@
+ 	do {
+-		if (full_read(STDIN_FILENO, &hdr, sizeof(hdr)) != sizeof(hdr))
++		r = full_read(STDIN_FILENO, &hdr, sizeof(hdr));
++		if (r == 0)
++			break;
++		if (r != sizeof(hdr))
+ 			goto err;
+ 
+ 		if (cut && hdr.name[0] == 0)
