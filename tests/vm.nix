@@ -77,6 +77,7 @@ let
       payload = hardwareFixture.driver version;
     };
   hardwareApp = impurifier.makeOfflineApk {
+    hostDependencies = [ "impurifier-host-driver" ];
     pkg = hardwareFixture.tool;
     inherit (hardwareFixture) hardware;
   };
@@ -126,8 +127,8 @@ pkgs.testers.runNixOSTest {
     machine.succeed("systemctl stop dhcpcd; ip link set eth0 down")
     root = "chroot /srv/alpine /usr/bin/env PATH=/usr/sbin:/usr/bin:/sbin:/bin "
     apk = root + "/sbin/apk --allow-untrusted --no-network --repository /packages "
-    machine.succeed("mkdir -p /srv/alpine/packages/x86_64 /srv/alpine/packages/noarch; cp /srv/alpine/packages/runtime.apk /srv/alpine/packages/noarch/apk-impurifier-0.1.0-r0.apk")
-    machine.succeed(root + "/sbin/apk --allow-untrusted index -o /packages/x86_64/APKINDEX.tar.gz /packages/noarch/apk-impurifier-0.1.0-r0.apk")
+    machine.succeed("mkdir -p /srv/alpine/packages/x86_64 /srv/alpine/packages/noarch; cp /srv/alpine/packages/runtime.apk /srv/alpine/packages/noarch/apk-impurifier-${impurifier.runtimeVersion}-r0.apk")
+    machine.succeed(root + "/sbin/apk --allow-untrusted index -o /packages/x86_64/APKINDEX.tar.gz /packages/noarch/apk-impurifier-${impurifier.runtimeVersion}-r0.apk")
     machine.succeed(apk + "add /packages/openrc.apk /packages/openrc-user.apk /packages/libcap.apk /packages/ifupdown.apk /packages/provider.apk /packages/runtime.apk")
     machine.succeed("mkdir -p /srv/alpine/run/openrc; echo default > /srv/alpine/run/openrc/softlevel")
     machine.fail("test -e ${builtins.unsafeDiscardStringContext (toString (tool "1"))}")
@@ -168,6 +169,8 @@ pkgs.testers.runNixOSTest {
         machine.fail("test -L /srv/alpine/etc/runlevels/default/apk-service")
         machine.succeed("test -d /srv/alpine/var/lib/apk-service")
     with subtest("native library upgrades refresh the hardware snapshot"):
+        code, output = machine.execute(apk + "add /packages/hardware.apk 2>&1")
+        assert code != 0 and "impurifier-host-driver" in output, output
         machine.succeed(apk + "add /packages/driver1.apk /packages/hardware.apk")
         machine.succeed(root + "/opt/nix/profile/bin/hardware-tool | grep '^1$'")
         before = machine.succeed("readlink /opt/nix/profile").strip()

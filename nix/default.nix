@@ -12,6 +12,7 @@ let
   core = import (coreSrc + "/nix") {
     inherit pkgs;
     namespace = "apk-impurifier";
+    sourceInfo = coreSrc;
   };
   architecture =
     if pkgs.stdenv.hostPlatform.isx86_64 then
@@ -150,9 +151,9 @@ let
         else
           100;
       dependencies = [
-        "apk-impurifier>=0.1.0"
+        "apk-impurifier>=${core.runtimeVersion}"
       ]
-      ++ lib.optionals payload.hostEnabled hostDeps;
+      ++ lib.optionals (payload.hostEnabled || (args.hostDependencies or null) != null) hostDeps;
 
     };
   makeRuntimeApk =
@@ -162,7 +163,7 @@ let
     }:
     buildApk {
       name = "apk-impurifier";
-      version = "0.1.0";
+      version = core.runtimeVersion;
       payload = core.makeRuntimeTree { };
       license = "MIT";
       description = "Native package intent projected into a Nix profile";
@@ -185,7 +186,12 @@ let
     };
 in
 {
-  inherit (core) engine offlineCache unit;
+  inherit (core)
+    engine
+    offlineCache
+    unit
+    runtimeVersion
+    ;
   inherit buildApk makeApk makeRuntimeApk;
   runtimeApk = makeRuntimeApk { };
   makePackage = args: {
