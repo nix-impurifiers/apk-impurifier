@@ -11,7 +11,7 @@ in impurifier.makePackage { pkg = pkgs.hello; }
 
 `makeRuntimeApk { nixDependency = "nix"; }` lets consumers choose a native Nix provider dependency. Python 3 and a working Nix installation must already exist. Providing Nix through an impure native package is deferred installer work, not excluded from the project.
 
-Both flavors use the same native package name and version. Their contents and APK identities differ; installing the other local artifact replaces the existing flavor through an ordinary native transaction. Separate Nix outputs select transport without placing flavor-specific names in APK's world file.
+Both flavors use the same native package name and version. Their contents and APK identities differ; installing the other local artifact replaces the existing flavor through an ordinary native transaction. Separate Nix outputs select transport without placing flavor-specific names in APK's world file. Export them under distinct filenames for local installation. Repository publication needs separate flavor channels or distinct native releases; both cannot occupy the same repository filename.
 
 ```sh
 sudo apk add --allow-untrusted ./hello-offline.apk
