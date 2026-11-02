@@ -1,5 +1,9 @@
 # SPDX-License-Identifier: MIT
-{ pkgs, impurifier }:
+{
+  pkgs,
+  impurifier,
+  hardwareFixture,
+}:
 let
   alpine = import ./alpine.nix { inherit pkgs; };
   tool =
@@ -64,6 +68,18 @@ let
         pidfile=/run/apk-service.pid
       '';
     };
+  hostDriver =
+    version:
+    impurifier.buildApk {
+      name = "impurifier-host-driver";
+      architecture = "x86_64";
+      inherit version;
+      payload = hardwareFixture.driver version;
+    };
+  hardwareApp = impurifier.makeOfflineApk {
+    pkg = hardwareFixture.tool;
+    inherit (hardwareFixture) hardware;
+  };
   provider = impurifier.buildApk {
     name = "vm-runtime";
     version = "1";
@@ -106,6 +122,7 @@ pkgs.testers.runNixOSTest {
     machine.succeed("ln -s ${pkgs.python3}/bin/python3 /srv/alpine/usr/bin/python3; ln -s ${pkgs.nix}/bin/nix-store /srv/alpine/usr/bin/nix-store")
     machine.succeed("cp ${provider} /srv/alpine/packages/provider.apk; cp ${impurifier.runtimeApk} /srv/alpine/packages/runtime.apk; cp ${app false "1"} /srv/alpine/packages/net1.apk; cp ${app true "1"} /srv/alpine/packages/offline1.apk; cp ${app true "2"} /srv/alpine/packages/offline2.apk; cp ${service "1"} /srv/alpine/packages/service1.apk; cp ${service "2"} /srv/alpine/packages/service2.apk")
     machine.succeed("cp ${alpine.openrc} /srv/alpine/packages/openrc.apk; cp ${alpine.openrc-user} /srv/alpine/packages/openrc-user.apk; cp ${alpine.libcap} /srv/alpine/packages/libcap.apk; cp ${alpine.ifupdown} /srv/alpine/packages/ifupdown.apk")
+    machine.succeed("cp ${hostDriver "1"} /srv/alpine/packages/driver1.apk; cp ${hostDriver "2"} /srv/alpine/packages/driver2.apk; cp ${hardwareApp} /srv/alpine/packages/hardware.apk")
     machine.succeed("systemctl stop dhcpcd; ip link set eth0 down")
     root = "chroot /srv/alpine /usr/bin/env PATH=/usr/sbin:/usr/bin:/sbin:/bin "
     apk = root + "/sbin/apk --allow-untrusted --no-network --repository /packages "
@@ -150,6 +167,14 @@ pkgs.testers.runNixOSTest {
         machine.fail(root + "/sbin/rc-service apk-service status")
         machine.fail("test -L /srv/alpine/etc/runlevels/default/apk-service")
         machine.succeed("test -d /srv/alpine/var/lib/apk-service")
+    with subtest("native library upgrades refresh the hardware snapshot"):
+        machine.succeed(apk + "add /packages/driver1.apk /packages/hardware.apk")
+        machine.succeed(root + "/opt/nix/profile/bin/hardware-tool | grep '^1$'")
+        before = machine.succeed("readlink /opt/nix/profile").strip()
+        machine.succeed(apk + "add /packages/driver2.apk")
+        assert machine.succeed("readlink /opt/nix/profile").strip() != before
+        machine.succeed(root + "/opt/nix/profile/bin/hardware-tool | grep '^2$'")
+        machine.succeed(apk + "del hardware-tool impurifier-host-driver")
     with subtest("rooted closures survive GC and removal drops intent"):
         machine.succeed("nix-store --gc")
         machine.succeed(root + "/opt/nix/profile/bin/apk-tool | grep '^2$'")

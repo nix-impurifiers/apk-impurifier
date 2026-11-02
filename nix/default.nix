@@ -173,7 +173,10 @@ let
       ];
       triggers = [
         "/usr/share/nix-profile.d"
-        "/usr/lib/apk-impurifier"
+        "/usr/lib"
+        "/usr/lib64"
+        "/lib"
+        "/lib64"
       ];
       scripts.trigger = pkgs.writeText "apk-impurifier.trigger" ''
         #!/bin/sh
