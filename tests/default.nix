@@ -20,6 +20,18 @@ in
     inherit pkgs impurifier;
     frontend = "apk3";
   };
+  native-vm = import ./native-vm.nix { inherit pkgs impurifier coreSrc; };
+  bundled-vm = import ./vm.nix {
+    inherit pkgs;
+    bundled = true;
+    hardwareFixture = import (coreSrc + "/tests/hardware-fixture.nix") { inherit pkgs; };
+    impurifier = impurifier // {
+      runtimeApk = impurifier.makeRuntimeApk {
+        bundledNixStore = "${import (coreSrc + "/tests/static-nix.nix") { inherit pkgs; }}/bin/nix-store";
+        bundledNixNotices = [ "${pkgs.nix.src}/COPYING" ];
+      };
+    };
+  };
   unit = impurifier.unit;
   emitter =
     pkgs.runCommand "apk-impurifier-contract"

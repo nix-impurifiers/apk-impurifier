@@ -3,6 +3,7 @@
   pkgs,
   impurifier,
   hardwareFixture,
+  bundled ? false,
 }:
 let
   alpine = import ./alpine.nix { inherit pkgs; };
@@ -120,15 +121,23 @@ pkgs.testers.runNixOSTest {
     machine.succeed("mkdir -p /srv/alpine; tar xzf ${alpine.rootfs} -C /srv/alpine")
     machine.succeed("mkdir -p /srv/alpine/nix /srv/alpine/proc /srv/alpine/sys /srv/alpine/dev /srv/alpine/packages /srv/alpine/opt/nix /srv/alpine/var/lib/apk-impurifier /opt/nix /var/lib/apk-impurifier")
     machine.succeed("mount --rbind /nix /srv/alpine/nix; mount -t proc proc /srv/alpine/proc; mount --rbind /dev /srv/alpine/dev; mount --rbind /sys /srv/alpine/sys; mount --bind /opt/nix /srv/alpine/opt/nix; mount --bind /var/lib/apk-impurifier /srv/alpine/var/lib/apk-impurifier")
-    machine.succeed("ln -s ${pkgs.python3}/bin/python3 /srv/alpine/usr/bin/python3; ln -s ${pkgs.nix}/bin/nix-store /srv/alpine/usr/bin/nix-store")
+    machine.succeed("ln -s ${pkgs.python3}/bin/python3 /srv/alpine/usr/bin/python3")
+    ${pkgs.lib.optionalString (
+      !bundled
+    ) ''machine.succeed("ln -s ${pkgs.nix}/bin/nix-store /srv/alpine/usr/bin/nix-store")''}
+    ${pkgs.lib.optionalString bundled ''machine.succeed("test ! -e /srv/alpine/usr/bin/nix-store && test ! -e /srv/alpine/nix/var/nix/profiles/default/bin/nix-store")''}
     machine.succeed("cp ${provider} /srv/alpine/packages/provider.apk; cp ${impurifier.runtimeApk} /srv/alpine/packages/runtime.apk; cp ${app false "1"} /srv/alpine/packages/net1.apk; cp ${app true "1"} /srv/alpine/packages/offline1.apk; cp ${app true "2"} /srv/alpine/packages/offline2.apk; cp ${service "1"} /srv/alpine/packages/service1.apk; cp ${service "2"} /srv/alpine/packages/service2.apk")
     machine.succeed("cp ${alpine.openrc} /srv/alpine/packages/openrc.apk; cp ${alpine.openrc-user} /srv/alpine/packages/openrc-user.apk; cp ${alpine.libcap} /srv/alpine/packages/libcap.apk; cp ${alpine.ifupdown} /srv/alpine/packages/ifupdown.apk")
     machine.succeed("cp ${hostDriver "1"} /srv/alpine/packages/driver1.apk; cp ${hostDriver "2"} /srv/alpine/packages/driver2.apk; cp ${hardwareApp} /srv/alpine/packages/hardware.apk")
     machine.succeed("systemctl stop dhcpcd; ip link set eth0 down")
     root = "chroot /srv/alpine /usr/bin/env PATH=/usr/sbin:/usr/bin:/sbin:/bin "
     apk = root + "/sbin/apk --allow-untrusted --no-network --repository /packages "
-    machine.succeed("mkdir -p /srv/alpine/packages/x86_64 /srv/alpine/packages/noarch; cp /srv/alpine/packages/runtime.apk /srv/alpine/packages/noarch/apk-impurifier-${impurifier.runtimeVersion}-r0.apk")
-    machine.succeed(root + "/sbin/apk --allow-untrusted index -o /packages/x86_64/APKINDEX.tar.gz /packages/noarch/apk-impurifier-${impurifier.runtimeVersion}-r0.apk")
+    machine.succeed("mkdir -p /srv/alpine/packages/x86_64 /srv/alpine/packages/noarch; cp /srv/alpine/packages/runtime.apk /srv/alpine/packages/${
+      if bundled then "x86_64" else "noarch"
+    }/apk-impurifier-${impurifier.runtimeVersion}-r0.apk")
+    machine.succeed(root + "/sbin/apk --allow-untrusted index -o /packages/x86_64/APKINDEX.tar.gz /packages/${
+      if bundled then "x86_64" else "noarch"
+    }/apk-impurifier-${impurifier.runtimeVersion}-r0.apk")
     machine.succeed(apk + "add /packages/openrc.apk /packages/openrc-user.apk /packages/libcap.apk /packages/ifupdown.apk /packages/provider.apk /packages/runtime.apk")
     machine.succeed("mkdir -p /srv/alpine/run/openrc; echo default > /srv/alpine/run/openrc/softlevel")
     machine.fail("test -e ${builtins.unsafeDiscardStringContext (toString (tool "1"))}")

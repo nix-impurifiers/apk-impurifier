@@ -120,6 +120,22 @@ let
         abuild-tar --cut < control.tar | gzip -n9 > control.tar.gz
         cat control.tar.gz data.tar.gz > "$out"
       '';
+  makeNativePackages =
+    args:
+    let
+      trees = core.makeNativeTrees args;
+    in
+    pkgs.runCommand "native-owned-apk-collection"
+      {
+        nativeBuildInputs = [
+          pkgs.python3
+          pkgs.apk-tools
+          archiveTools
+        ];
+      }
+      ''
+        python3 ${./native-packages.py} ${trees} "$out" ${architecture}
+      '';
   makeApk =
     args@{
       pkg,
@@ -167,20 +183,23 @@ let
     };
   makeRuntimeApk =
     {
-      nixDependency ? "nix",
+      bundledNixStore ? null,
+      bundledNixNotices ? [ ],
+      nixDependency ? (if bundledNixStore == null then "nix" else null),
       pythonDependency ? "python3",
     }:
     buildApk {
       name = "apk-impurifier";
+      architecture = if bundledNixStore == null then "noarch" else architecture;
       version = core.runtimeVersion;
-      payload = core.makeRuntimeTree { };
+      payload = core.makeRuntimeTree { inherit bundledNixStore bundledNixNotices; };
       license = "MIT";
       description = "Native package intent projected into a Nix profile";
       dependencies = [
         pythonDependency
-        nixDependency
         "/bin/sh"
-      ];
+      ]
+      ++ lib.optional (nixDependency != null) nixDependency;
       triggers = [
         "/usr/share/nix-profile.d"
         "/usr/lib"
@@ -242,6 +261,7 @@ in
     buildApk
     makeApk
     makeRuntimeApk
+    makeNativePackages
     makeRepository
     ;
   runtimeApk = makeRuntimeApk { };

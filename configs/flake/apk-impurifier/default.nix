@@ -23,6 +23,7 @@
     {
       packages = {
         default = impurifier.engine;
+        hello-native-packages = impurifier.makeNativePackages { pkg = pkgs.hello; };
         engine = impurifier.engine;
         runtime-apk = impurifier.runtimeApk;
         hello-net-apk = impurifier.makeNetApk { pkg = pkgs.hello; };
