@@ -15,6 +15,11 @@ let
   };
 in
 {
+  repository-apk2 = import ./repository-vm.nix { inherit pkgs impurifier; };
+  repository-apk3 = import ./repository-vm.nix {
+    inherit pkgs impurifier;
+    frontend = "apk3";
+  };
   unit = impurifier.unit;
   emitter =
     pkgs.runCommand "apk-impurifier-contract"

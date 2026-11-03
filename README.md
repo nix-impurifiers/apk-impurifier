@@ -19,17 +19,41 @@ sudo apk add --allow-untrusted ./hello-net.apk
 sudo apk del hello
 ```
 
-Unsigned local artifacts require `--allow-untrusted`; a production repository should use its own signing/distribution policy. The emitter does not modify global trust configuration.
+Unsigned local artifacts require `--allow-untrusted`. For repositories, use
+`makeRepository { packages = [ runtime app.offline ]; }`. It emits an indexed
+repository with native architecture and `noarch` directories and rejects
+colliding package filenames. Copy the output to a writable publication directory,
+then run its `sign-repository REPOSITORY PRIVATE-KEY` helper with actual
+`apk` and `abuild-sign` on PATH. The publisher supplies the RSA key outside the
+Nix store. The helper signs packages, regenerates their index, then signs the
+index. Distribute the public key through your normal trusted channel into
+`/etc/apk/keys`. The emitter does not change global trust configuration.
+
+Signed repository tests use distinct native releases when changing transport:
+net `1-r0`, offline `1-r1`, then application version `2-r1`. Native `apk fix`
+retains the installed package identity, so a different same-version artifact
+in another repository is not a reliable replacement path; use local artifacts
+or explicit releases/channels as described above.
 
 `configFiles`, `files`, `users`, and `directories` use the common payload DSL. OpenRC is the default host backend; `openrc.script` accepts a native runscript. Its `enable`, `startOnInstall`, `restartOnUpgrade`, and `stopOnRemove` policies default to true. The engine provisions accounts and directories using BusyBox, publishes the profile, and starts services. Scripts should invoke `/opt/nix/profile/bin/<tool>`. Removed services retain a generation-owned copy of the effective runscript so post-transaction cleanup can stop them after APK removes their installed script. Persistent accounts and data remain. Native protected configuration rules govern edited files.
 
-The runtime uses an APK directory trigger. Fetch/composition failure preserves the previous profile, although APK may have committed package changes. Service failures may occur after publication. Inspect diagnostics, fix the cause and run `/usr/sbin/nix-profile-engine reconcile`. APK can retain a broken-script flag after a failed trigger; recovery also requires native `apk fix apk-impurifier` with the runtime artifact available in a repository. `status` reports the published profile; `prune --keep 2` retains active and pending activation roots.
+The runtime uses an APK directory trigger. Fetch/composition failure preserves the previous profile, although APK may have committed package changes. Service failures may occur after publication. Inspect diagnostics, fix the cause and run `/usr/sbin/nix-profile-engine reconcile`. APK can retain a broken-script flag after a failed trigger; recovery also requires native `apk fix apk-impurifier` with the runtime artifact available in a repository. The runtime pre-deinstall hook reconciles and prunes while its engine and
+dependencies are available, so solver removal with the last app clears the
+projection and GC roots. `status` reports the published profile; `prune --keep 2` retains active and pending activation roots.
 
 ```sh
 nix flake check -L
 ```
 
-Checks include native APK verification, reference-free artifact closures, shared engine contracts, and a QEMU VM with actual Alpine userspace, APK and OpenRC. The fixture supplies a preinstalled Nix/Python runtime and pinned native OpenRC packages; it does not test a Nix installer or an Alpine kernel/PID 1 boot.
+Checks include native APK verification, reference-free artifact closures, shared engine contracts, and a QEMU VM with actual Alpine userspace, APK and OpenRC. Two additional signed-repository VMs run Alpine APK 2 and APK 3 against
+actual APK v2 packages. They check signed indexes and packages, unsigned and
+corruption rejection, net failure/offline recovery, configuration preservation,
+ordinary-user execution, upgrades, automatic runtime removal and GC. APK 2 can
+report a bad index signature as a warning while retaining previously trusted
+metadata; the test checks that diagnostic rather than treating exit status zero
+as proof that new metadata was accepted.
+
+The fixture supplies a preinstalled Nix/Python runtime and pinned native OpenRC packages; it does not test a Nix installer or an Alpine kernel/PID 1 boot.
 
 MIT.
 

@@ -188,11 +188,48 @@ let
         "/lib"
         "/lib64"
       ];
+      scripts.pre-deinstall = pkgs.writeText "apk-impurifier.pre-deinstall" ''
+        #!/bin/sh
+        set -eu
+        /usr/sbin/nix-profile-engine reconcile
+        /usr/sbin/nix-profile-engine prune --keep 0
+      '';
       scripts.trigger = pkgs.writeText "apk-impurifier.trigger" ''
         #!/bin/sh
         exec /usr/sbin/nix-profile-engine reconcile
       '';
     };
+  makeRepository =
+    {
+      packages,
+      name ? "impurifier-apk-repository",
+    }:
+    assert lib.assertMsg (packages != [ ]) "APK repository requires packages";
+    pkgs.runCommand name
+      {
+        nativeBuildInputs = [
+          pkgs.apk-tools
+          pkgs.libarchive
+        ];
+        __structuredAttrs = true;
+        unsafeDiscardReferences.out = true;
+      }
+      ''
+        mkdir -p $out/${architecture} $out/noarch
+        ${lib.concatMapStringsSep "\n" (package: ''
+          info=$(bsdtar -xOf ${package} .PKGINFO)
+          packageName=$(printf '%s\n' "$info" | sed -n 's/^pkgname = //p')
+          packageVersion=$(printf '%s\n' "$info" | sed -n 's/^pkgver = //p')
+          packageArchitecture=$(printf '%s\n' "$info" | sed -n 's/^arch = //p')
+          test "$packageArchitecture" = noarch || test "$packageArchitecture" = ${architecture}
+          destination="$out/$packageArchitecture/$packageName-$packageVersion.apk"
+          test ! -e "$destination" || { echo 'duplicate APK repository filename' >&2; exit 1; }
+          cp ${package} "$destination"
+        '') packages}
+        apk index --allow-untrusted -o $out/${architecture}/APKINDEX.tar.gz $out/*/*.apk
+        cp ${./sign-repository.sh} $out/sign-repository
+        chmod +x $out/sign-repository
+      '';
 in
 {
   inherit (core)
@@ -201,7 +238,12 @@ in
     unit
     runtimeVersion
     ;
-  inherit buildApk makeApk makeRuntimeApk;
+  inherit
+    buildApk
+    makeApk
+    makeRuntimeApk
+    makeRepository
+    ;
   runtimeApk = makeRuntimeApk { };
   makePackage = args: {
     net = makeApk (args // { offline = false; });
