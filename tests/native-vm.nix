@@ -31,5 +31,5 @@ import (coreSrc + "/tests/native-vm.nix") {
   upgrade = install;
   removeFirst = "${command} del native-first";
   removeSecond = "${command} del native-second";
-  verify = "${command} audit --system";
+  verify = ''test -z "$(${command} audit --system)"'';
 }
